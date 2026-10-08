@@ -303,19 +303,21 @@ android {
     // flavor so its source set (src/stmobile/) keeps applying without a directory move.
     productFlavors {
         stmobile {
-            // Brand-neutral, GitHub-verifiable applicationId (io.github.<user>.*) chosen so the
-            // package name never has to change if the app is ever renamed — "arc" ties to the
-            // arch-"n" launcher mark (Catalan for "arch"). This ID is permanent once released;
-            // do not couple it to the marketing name. See docs/gtm + the legal-risk memo.
             applicationId "com.siro.stube"
-            minSdk = 24 // media3 1.10.x floor is 23; 24 = project-wide minimum
+            minSdk = 24
             targetSdk = project.ext.targetSdkVersion
-            // Stube versions independently of upstream SmartTube (defaultConfig carries the
-            // fork-point 31.97/2387). versionCode starts at 10000 - above upstream's code so
-            // existing test installs upgrade in place - and encodes the version:
-            // 1.0.0 -> 10000, 1.0.1 -> 10001, 1.1.0 -> 10100, 2.0.0 -> 20000.
-            versionCode 10000
-            versionName "1.0"
+            versionCode 10100
+            versionName "1.1"
+        }
+
+        // Dedicated Android TV build. Uses the original Leanback/TV UI and
+        // a separate package so it can be installed beside the mobile app.
+        sttv {
+            applicationId "com.siro.stube.tv"
+            minSdk = 24
+            targetSdk = project.ext.targetSdkVersion
+            versionCode 10100
+            versionName "1.1"
         }
     }
 }
