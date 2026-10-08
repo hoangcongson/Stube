@@ -28,7 +28,7 @@
         tools:replace="android:required" />
     <uses-feature
         android:name="android.hardware.touchscreen"
-        android:required="true"
+        android:required="false"
         tools:replace="android:required" />
 
     <!-- Background audio: a media-playback foreground service (MobilePlaybackService) keeps the
@@ -100,7 +100,13 @@
             android:launchMode="singleTop"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|layoutDirection|uiMode"
             android:theme="@style/Theme.Stube"
-            tools:replace="android:launchMode,android:configChanges" />
+            tools:replace="android:launchMode,android:configChanges">
+            <!-- Make the same Stube APK discoverable from the Android TV launcher. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name="com.siro.stube.mobile.ui.browse.MobileBrowseActivity"
