@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mobile_settings_general">Chung</string>
+    <string name="mobile_settings_language">Ngôn ngữ</string>
+    <string name="mobile_settings_country">Quốc gia</string>
+</resources>
