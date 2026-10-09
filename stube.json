@@ -1,0 +1,26 @@
+{
+  "package": {
+    "downloadUrlList_arm64-v8a": [
+      "https://github.com/hoangcongson/Stube/releases/download/v1.1/Stube_1.1_arm64-v8a.apk"
+    ],
+    "downloadSize_arm64-v8a": 60096834,
+    "downloadUrlList_armeabi-v7a": [
+      "https://github.com/hoangcongson/Stube/releases/download/v1.1/Stube_1.1_armeabi-v7a.apk"
+    ],
+    "downloadSize_armeabi-v7a": 48791882,
+    "downloadUrlList_x86": [
+      "https://github.com/hoangcongson/Stube/releases/download/v1.1/Stube_1.1_x86.apk"
+    ],
+    "downloadSize_x86": 58712362,
+    "downloadUrlList": [
+      "https://github.com/hoangcongson/Stube/releases/download/v1.1/Stube_1.1_universal.apk"
+    ],
+    "downloadSize": 90817152
+  },
+  "1.1": {
+    "versionCode": 10100,
+    "changelog": [
+      "Stube 1.1 release"
+    ]
+  }
+}
