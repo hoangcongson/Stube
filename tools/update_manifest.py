@@ -127,7 +127,9 @@ def main():
     package["downloadSize"] = (dist / universal).stat().st_size
 
     manifest = {"package": package}
-    for version in list(english)[:args.versions]:
+    # Stube has its own release cadence; never publish upstream SmartTube versions
+    # in this manifest. Only advertise the exact Stube release being built.
+    for version in [name]:
         entry = {"versionCode": version_code(version),
                  "changelog": english[version][:MAX_LINES_PER_VERSION]}
         if spanish.get(version):
