@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string-array name="update_urls">
-        <item>https://github.com/hoangcongson/Stube/releases/latest/download/stube.json</item>
-        <item>https://github.com/hoangcongson/Stube/releases/download/latest/stube.json</item>
+        <item>https://raw.githubusercontent.com/hoangcongson/Stube/main/stube.json</item>
+        <item>https://raw.githubusercontent.com/hoangcongson/Stube/main/stube.json</item>
     </string-array>
     <string name="about_release_url" translatable="false">https://github.com/hoangcongson/Stube/releases</string>
 </resources>
