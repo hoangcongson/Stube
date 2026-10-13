@@ -380,6 +380,9 @@ dependencies {
     // widgets.
     implementation 'com.google.android.material:material:' + materialVersion
 
+    // Touch UI (stmobile): backdrop blur for the translucent home navigation dock.
+    implementation 'com.github.Dimezis:BlurView:version-3.2.0'
+
     // Touch UI (stmobile flavor): pull-to-refresh on the feed grid (MobileBrowseActivity).
     // Harmless for the TV flavors, which never reference it.
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.2.0'

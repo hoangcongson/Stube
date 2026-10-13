@@ -411,7 +411,7 @@
                     style="?android:attr/progressBarStyleLarge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:indeterminateTint="@color/mobile_color_primary"
+                    android:indeterminateTint="@color/mobile_color_icon_accent"
                     android:indeterminateTintMode="src_in" />
 
                 <TextView
@@ -587,8 +587,8 @@
                         android:layout_height="wrap_content"
                         android:layout_marginHorizontal="8dp"
                         android:layout_weight="1"
-                        android:progressTint="@color/mobile_color_primary"
-                        android:thumbTint="@color/mobile_color_primary" />
+                        android:progressTint="@color/mobile_color_icon_accent"
+                        android:thumbTint="@color/mobile_color_icon_accent" />
 
                     <TextView
                         android:id="@+id/mobile_cast_duration"

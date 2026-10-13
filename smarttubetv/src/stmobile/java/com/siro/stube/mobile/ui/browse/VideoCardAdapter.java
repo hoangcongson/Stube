@@ -174,9 +174,12 @@ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder
         private final ProgressBar mWatchProgress;
         private final TextView mTitle;
         private final TextView mMeta;
+        private final ImageView mAuthorAvatar;
         private final View mOverflow;
         private Video mVideo;
         private String mBoundThumbUrl;
+        private String mBoundAuthorAvatarUrl;
+        private String mBoundAuthorChannelId;
 
         public VideoViewHolder(@NonNull View itemView, OnVideoClickListener clickListener) {
             super(itemView);
@@ -187,6 +190,7 @@ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder
             mWatchProgress = itemView.findViewById(R.id.video_watch_progress);
             mTitle = itemView.findViewById(R.id.video_title);
             mMeta = itemView.findViewById(R.id.video_meta);
+            mAuthorAvatar = itemView.findViewById(R.id.video_author_avatar);
             mOverflow = itemView.findViewById(R.id.video_overflow);
 
             itemView.setOnClickListener(v -> {
@@ -229,6 +233,7 @@ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder
             // service didn't build the info line (e.g. some playlist rows).
             CharSequence meta = video.getSecondTitle();
             mMeta.setText(meta == null || meta.length() == 0 ? video.getAuthor() : meta);
+            bindAuthorAvatar(context, video.authorImageUrl, video.channelId);
 
             bindBadge(context, video);
             bindProgress(video);
@@ -249,6 +254,10 @@ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder
             mTitle.setText(video.getTitle());
             CharSequence meta = video.getSecondTitle();
             mMeta.setText(meta == null || meta.length() == 0 ? video.getAuthor() : meta);
+            if (!java.util.Objects.equals(mBoundAuthorAvatarUrl, video.authorImageUrl)
+                    || !java.util.Objects.equals(mBoundAuthorChannelId, video.channelId)) {
+                bindAuthorAvatar(context, video.authorImageUrl, video.channelId);
+            }
 
             bindBadge(context, video);
             bindProgress(video);
@@ -279,6 +288,22 @@ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder
                 mBadge.setBackgroundColor(ContextCompat.getColor(context,
                         video.isLive || video.isUpcoming ? R.color.mobile_color_badge_live_bg : R.color.mobile_color_badge_bg));
                 mBadge.setVisibility(View.VISIBLE);
+            }
+        }
+
+        private void bindAuthorAvatar(Context context, String avatarUrl, String channelId) {
+            mBoundAuthorAvatarUrl = avatarUrl;
+            mBoundAuthorChannelId = channelId;
+            if (avatarUrl != null && !avatarUrl.trim().isEmpty()) {
+                mAuthorAvatar.setTag(channelId);
+                Glide.with(context)
+                        .load(avatarUrl)
+                        .circleCrop()
+                        .placeholder(R.drawable.ic_watch_channel_placeholder)
+                        .error(R.drawable.ic_watch_channel_placeholder)
+                        .into(mAuthorAvatar);
+            } else {
+                ChannelAvatarResolver.load(mAuthorAvatar, channelId);
             }
         }
 
@@ -400,7 +425,11 @@ public class VideoCardAdapter extends ListAdapter<Video, RecyclerView.ViewHolder
         public void unbind() {
             mVideo = null;
             mBoundThumbUrl = null;
+            mBoundAuthorAvatarUrl = null;
+            mBoundAuthorChannelId = null;
+            mAuthorAvatar.setTag(null);
             Glide.with(itemView.getContext().getApplicationContext()).clear(mThumbnail);
+            Glide.with(itemView.getContext().getApplicationContext()).clear(mAuthorAvatar);
         }
     }
 

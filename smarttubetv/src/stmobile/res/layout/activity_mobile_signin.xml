@@ -74,7 +74,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:indeterminateTint="@color/mobile_color_primary" />
+                android:indeterminateTint="@color/mobile_color_icon_accent" />
 
             <!--
               Error state: a human-readable headline + "Try again" (restarts the flow with a
@@ -388,7 +388,7 @@
                 <ProgressBar
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:indeterminateTint="@color/mobile_color_primary" />
+                    android:indeterminateTint="@color/mobile_color_icon_accent" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -461,7 +461,7 @@
                     android:layout_height="72dp"
                     android:contentDescription="@string/mobile_signin_success"
                     android:src="@drawable/ic_mobile_check"
-                    app:tint="@color/mobile_color_primary" />
+                    app:tint="@color/mobile_color_icon_accent" />
 
                 <TextView
                     android:layout_width="wrap_content"

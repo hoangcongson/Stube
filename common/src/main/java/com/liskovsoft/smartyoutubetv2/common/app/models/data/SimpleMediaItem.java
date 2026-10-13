@@ -18,6 +18,7 @@ public final class SimpleMediaItem implements MediaItem {
     private int mType;
     private String mBackgroundImageUrl;
     private String mAuthor;
+    private String mAuthorImageUrl;
     private int mPercentWatched;
     private int mStartTimeSeconds;
     private String mBadgeText;
@@ -46,6 +47,7 @@ public final class SimpleMediaItem implements MediaItem {
                 metadata.getNextVideo().getPlaylistId() : null;
         mediaItem.mParams = metadata.getParams();
         mediaItem.mChannelId = metadata.getChannelId();
+        mediaItem.mAuthorImageUrl = metadata.getAuthorImageUrl();
 
         return mediaItem;
     }
@@ -63,6 +65,7 @@ public final class SimpleMediaItem implements MediaItem {
         mediaItem.mBackgroundImageUrl = video.bgImageUrl;
         mediaItem.mCardImageUrl = video.cardImageUrl;
         mediaItem.mAuthor = video.author;
+        mediaItem.mAuthorImageUrl = video.authorImageUrl;
         mediaItem.mPercentWatched = (int) video.percentWatched;
         mediaItem.mStartTimeSeconds = video.startTimeSeconds;
         mediaItem.mBadgeText = video.badge;
@@ -123,6 +126,11 @@ public final class SimpleMediaItem implements MediaItem {
     @Override
     public String getAuthor() {
         return mAuthor;
+    }
+
+    @Override
+    public String getAuthorImageUrl() {
+        return mAuthorImageUrl;
     }
 
     @Override

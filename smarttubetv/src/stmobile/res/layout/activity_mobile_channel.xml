@@ -106,7 +106,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:visibility="gone"
-            android:indeterminateTint="@color/mobile_color_primary"
+            android:indeterminateTint="@color/mobile_color_icon_accent"
             android:indeterminateTintMode="src_in" />
 
     </FrameLayout>

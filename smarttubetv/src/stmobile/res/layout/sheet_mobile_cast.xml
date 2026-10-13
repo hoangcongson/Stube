@@ -67,7 +67,7 @@
                     style="?android:attr/progressBarStyleSmall"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
-                    android:indeterminateTint="@color/mobile_color_primary"
+                    android:indeterminateTint="@color/mobile_color_icon_accent"
                     android:indeterminateTintMode="src_in" />
 
                 <TextView

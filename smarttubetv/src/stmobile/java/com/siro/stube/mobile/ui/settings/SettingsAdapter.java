@@ -141,7 +141,7 @@ final class SettingsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
             title.setText(row.title);
             title.setTextColor(ContextCompat.getColor(itemView.getContext(),
-                    row.destructive ? R.color.mobile_color_primary : R.color.mobile_color_on_surface));
+                    row.destructive ? R.color.mobile_color_icon_accent : R.color.mobile_color_on_surface));
 
             CharSequence text = row.summaryText();
             if (text != null && text.length() > 0) {

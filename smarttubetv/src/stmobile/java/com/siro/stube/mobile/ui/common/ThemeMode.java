@@ -50,6 +50,7 @@ public final class ThemeMode {
 
     private static final String PREFS = "stube_theme";
     private static final String KEY_MODE = "mode";
+    private static final String KEY_BRIGHT_DEFAULT_MIGRATED = "bright_default_migrated_v1";
 
     private static volatile int sMode = SYSTEM;
     private static final List<WeakReference<MobileActivity>> sScreens = new ArrayList<>();
@@ -58,18 +59,19 @@ public final class ThemeMode {
     }
 
     /**
-     * Startup, before any screen exists. The first run of a version with this setting picks its
-     * default: System default for a new install, Dark for an install upgrading from the dark-only
-     * app, so nobody's app changes colour on update.
+     * Startup, before any screen exists. Move every existing install to the bright palette
+     * once; afterward the user's Theme setting remains authoritative across launches.
      *
      * @param existingInstall this install ran an earlier version (see {@link #isExistingInstall})
      */
     public static void init(@NonNull Application app, boolean existingInstall) {
         SharedPreferences prefs = prefs(app);
-        if (!prefs.contains(KEY_MODE)) {
-            int initial = existingInstall ? DARK : SYSTEM;
-            prefs.edit().putInt(KEY_MODE, initial).apply();
-            NetPath.log("theme default mode=" + name(initial) + " existing=" + (existingInstall ? "y" : "n"));
+        if (!prefs.getBoolean(KEY_BRIGHT_DEFAULT_MIGRATED, false)) {
+            prefs.edit()
+                    .putInt(KEY_MODE, LIGHT)
+                    .putBoolean(KEY_BRIGHT_DEFAULT_MIGRATED, true)
+                    .apply();
+            NetPath.log("theme bright default migration existing=" + (existingInstall ? "y" : "n"));
         }
         sMode = sanitize(prefs.getInt(KEY_MODE, SYSTEM));
         MotherActivity.setNightModeSource(context -> forcedNight(sMode));

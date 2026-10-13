@@ -60,6 +60,8 @@ public final class Video {
     public String cardImageUrl;
     public String altCardImageUrl;
     public String author;
+    /** Optional channel avatar URL, filled when richer video metadata is synchronized. */
+    public String authorImageUrl;
     public String badge;
     public String previewUrl;
     public float percentWatched = -1;
@@ -155,6 +157,13 @@ public final class Video {
         video.bgImageUrl = item.getBackgroundImageUrl();
         video.cardImageUrl = item.getCardImageUrl();
         video.author = item.getAuthor();
+        video.authorImageUrl = item.getAuthorImageUrl();
+        if (item instanceof MediaItemMetadata) {
+            String metadataAvatar = ((MediaItemMetadata) item).getAuthorImageUrl();
+            if (metadataAvatar != null && !metadataAvatar.isEmpty()) {
+                video.authorImageUrl = metadataAvatar;
+            }
+        }
         video.percentWatched = item.getPercentWatched();
         video.startTimeSeconds = item.getStartTimeSeconds();
         video.badge = item.getBadgeText();
@@ -189,6 +198,7 @@ public final class Video {
         video.bgImageUrl = item.bgImageUrl;
         video.cardImageUrl = item.cardImageUrl;
         video.author = item.author;
+        video.authorImageUrl = item.authorImageUrl;
         video.percentWatched = item.percentWatched;
         video.badge = item.badge;
         video.hasNewContent = item.hasNewContent;
@@ -788,6 +798,10 @@ public final class Video {
         subscriberCount = metadata.getSubscriberCount();
         notificationStates = metadata.getNotificationStates();
         author = metadata.getAuthor();
+        String metadataAvatar = metadata.getAuthorImageUrl();
+        if (metadataAvatar != null && !metadataAvatar.isEmpty()) {
+            authorImageUrl = metadataAvatar;
+        }
         durationMs = metadata.getDurationMs();
         mediaItem = toMediaItem(); // Fix subscribe during playback (see PlayerUIController.callMediaItemObservable)
         isSynced = true;
@@ -858,6 +872,8 @@ public final class Video {
         video.metadataTitle = metadataTitle;
         video.secondTitle = secondTitle;
         video.metadataSecondTitle = metadataSecondTitle;
+        video.author = author;
+        video.authorImageUrl = authorImageUrl;
         video.percentWatched = percentWatched;
         video.cardImageUrl = cardImageUrl;
         video.fromQueue = fromQueue;

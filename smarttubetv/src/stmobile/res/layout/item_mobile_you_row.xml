@@ -4,31 +4,46 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="52dp"
-    android:background="?attr/selectableItemBackground"
+    android:layout_height="48dp"
+    android:background="@drawable/bg_mobile_you_row_ripple"
     android:clickable="true"
     android:focusable="true"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingHorizontal="20dp">
 
-    <ImageView
-        android:id="@+id/mobile_you_row_icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:contentDescription="@null"
-        android:scaleType="fitCenter"
-        android:tint="@color/mobile_color_on_surface" />
+    <FrameLayout
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:background="@drawable/bg_mobile_you_icon_tile">
+
+        <ImageView
+            android:id="@+id/mobile_you_row_icon"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter"
+            android:tint="@color/mobile_color_icon_accent" />
+
+    </FrameLayout>
 
     <TextView
         android:id="@+id/mobile_you_row_label"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="20dp"
+        android:layout_marginStart="12dp"
         android:layout_weight="1"
         android:ellipsize="end"
         android:maxLines="1"
         android:textColor="@color/mobile_color_on_surface"
-        android:textSize="15sp" />
+        android:textSize="14sp" />
+
+    <ImageView
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_chevron_right"
+        android:tint="@color/mobile_color_on_surface_secondary" />
 
 </LinearLayout>

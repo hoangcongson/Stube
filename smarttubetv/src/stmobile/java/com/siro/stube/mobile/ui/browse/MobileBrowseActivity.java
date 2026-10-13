@@ -4,19 +4,27 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+import android.view.Window;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -26,11 +34,14 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
-
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
 import com.google.android.material.badge.BadgeDrawable;
@@ -76,9 +87,12 @@ import com.siro.stube.mobile.update.AppUpdates;
 import com.siro.stube.mobile.ui.playback.MiniPlayerBridge;
 import com.siro.stube.mobile.ui.playback.PlayerGesturePrefs;
 import com.siro.stube.mobile.ui.playback.SystemPipBridge;
+import eightbitlab.com.blurview.BlurTarget;
+import eightbitlab.com.blurview.BlurView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Touch Home shell - Wave 1 vertical slice.
@@ -155,6 +169,22 @@ public class MobileBrowseActivity extends MobileActivity
     private GridLayoutManager mLayoutManager;
     private VideoCardAdapter mAdapter;
     private BottomNavigationView mBottomNav;
+    private View mBottomGlass;
+    private LinearLayout mBottomNavItems;
+    /** Active dock tab used by the custom glass items before Material finishes its click callback. */
+    private int mBottomNavActiveItemId = Menu.NONE;
+    private View mBottomNavAnchor;
+    private int mBottomNavAnchorHeight;
+    private int mBottomNavSystemInset;
+    private boolean mBottomNavHidden;
+    /** OEM fallback: tracks a dock tap before vendor ViewGroups can consume it. */
+    private View mBottomNavTouchTarget;
+    private boolean mBottomNavTouchCaptured;
+    private boolean mBottomNavTouchCanClick;
+    private float mBottomNavTouchDownX;
+    private float mBottomNavTouchDownY;
+    private long mBottomNavTouchDownTime;
+    private final int[] mBottomNavTouchLocation = new int[2];
     // "You" tab panel (account header + grouped section rows + Settings row; replaces the drawer).
     private View mYouPanel;
     private LinearLayout mYouRows;
@@ -226,8 +256,144 @@ public class MobileBrowseActivity extends MobileActivity
 
     @Override
     protected boolean shouldInsetContentForNavigationBar() {
-        // BottomNavigationView paints through the gesture area and applies that inset internally.
+        // Browse draws its backdrop behind the transparent Android navigation bar. The dock
+        // and feed anchor receive that inset themselves in setupGlassNavigation().
         return false;
+    }
+
+    @Override
+    protected void applyMobileSystemBars() {
+        super.applyMobileSystemBars();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Window window = getWindow();
+            WindowCompat.setDecorFitsSystemWindows(window, false);
+            window.setNavigationBarColor(android.graphics.Color.TRANSPARENT);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.setNavigationBarContrastEnforced(false);
+            }
+            View root = findViewById(R.id.mobile_browse_root);
+            if (root != null) {
+                root.requestApplyInsets();
+            }
+        }
+    }
+
+    /**
+     * MIUI on some Redmi builds can consume taps over the glass-backed dock before its child
+     * click listeners run. Capture only gestures that start inside one of the visible dock items,
+     * then forward a stationary release to that item's normal click/long-click handler. Swipes
+     * that start on the dock are consumed but never activate a tab.
+     */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (mBottomNavItems == null || mBottomGlass == null || mBottomNavHidden
+                || mBottomGlass.getVisibility() != View.VISIBLE) {
+            return super.dispatchTouchEvent(event);
+        }
+
+        float rawX = event.getRawX();
+        float rawY = event.getRawY();
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mBottomNavTouchTarget = findBottomNavItemAt(rawX, rawY);
+                if (mBottomNavTouchTarget != null && mBottomNavTouchTarget.isEnabled()) {
+                    mBottomNavTouchCaptured = true;
+                    mBottomNavTouchCanClick = true;
+                    mBottomNavTouchDownX = rawX;
+                    mBottomNavTouchDownY = rawY;
+                    mBottomNavTouchDownTime = event.getEventTime();
+                    mBottomNavTouchTarget.setPressed(true);
+                    return true;
+                }
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                if (mBottomNavTouchCaptured) {
+                    int slop = ViewConfiguration.get(this).getScaledTouchSlop();
+                    boolean movedTooFar = Math.abs(rawX - mBottomNavTouchDownX) > slop
+                            || Math.abs(rawY - mBottomNavTouchDownY) > slop;
+                    if (movedTooFar || !isInsideBottomNavItem(mBottomNavTouchTarget, rawX, rawY)) {
+                        mBottomNavTouchCanClick = false;
+                        if (mBottomNavTouchTarget != null) {
+                            mBottomNavTouchTarget.setPressed(false);
+                        }
+                    }
+                    return true;
+                }
+                break;
+
+            case MotionEvent.ACTION_POINTER_DOWN:
+                if (mBottomNavTouchCaptured) {
+                    mBottomNavTouchCanClick = false;
+                    if (mBottomNavTouchTarget != null) {
+                        mBottomNavTouchTarget.setPressed(false);
+                    }
+                    return true;
+                }
+                break;
+
+            case MotionEvent.ACTION_POINTER_UP:
+                if (mBottomNavTouchCaptured) {
+                    return true;
+                }
+                break;
+
+            case MotionEvent.ACTION_UP:
+                if (mBottomNavTouchCaptured) {
+                    View target = mBottomNavTouchTarget;
+                    boolean activate = mBottomNavTouchCanClick && target != null
+                            && target.getParent() == mBottomNavItems
+                            && isInsideBottomNavItem(target, rawX, rawY);
+                    clearBottomNavTouch();
+                    if (activate) {
+                        long heldMs = event.getEventTime() - mBottomNavTouchDownTime;
+                        if (heldMs >= ViewConfiguration.getLongPressTimeout() && target.performLongClick()) {
+                            return true;
+                        }
+                        target.performClick();
+                    }
+                    return true;
+                }
+                break;
+
+            case MotionEvent.ACTION_CANCEL:
+                if (mBottomNavTouchCaptured) {
+                    clearBottomNavTouch();
+                    return true;
+                }
+                break;
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    private View findBottomNavItemAt(float screenX, float screenY) {
+        for (int index = 0; index < mBottomNavItems.getChildCount(); index++) {
+            View item = mBottomNavItems.getChildAt(index);
+            if (item.getVisibility() == View.VISIBLE && isInsideBottomNavItem(item, screenX, screenY)) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private boolean isInsideBottomNavItem(View item, float screenX, float screenY) {
+        if (item == null || item.getVisibility() != View.VISIBLE || item.getWidth() == 0 || item.getHeight() == 0) {
+            return false;
+        }
+        item.getLocationOnScreen(mBottomNavTouchLocation);
+        return screenX >= mBottomNavTouchLocation[0]
+                && screenX < mBottomNavTouchLocation[0] + item.getWidth()
+                && screenY >= mBottomNavTouchLocation[1]
+                && screenY < mBottomNavTouchLocation[1] + item.getHeight();
+    }
+
+    private void clearBottomNavTouch() {
+        if (mBottomNavTouchTarget != null) {
+            mBottomNavTouchTarget.setPressed(false);
+        }
+        mBottomNavTouchTarget = null;
+        mBottomNavTouchCaptured = false;
+        mBottomNavTouchCanClick = false;
     }
 
     @Override
@@ -244,6 +410,7 @@ public class MobileBrowseActivity extends MobileActivity
         registerBackHandler(this::handleBack);
 
         bindViews();
+        setupGlassNavigation();
         setupContentGrid();
         setupBottomNav();
         setupYouPanel();
@@ -285,6 +452,7 @@ public class MobileBrowseActivity extends MobileActivity
         mFeedSkeleton = findViewById(R.id.mobile_feed_skeleton);
         setupSwipeRefresh();
         mBottomNav = findViewById(R.id.mobile_bottom_nav);
+        mBottomNavItems = findViewById(R.id.mobile_bottom_items);
         mYouPanel = findViewById(R.id.mobile_you_panel);
         mYouRows = findViewById(R.id.mobile_you_rows);
         mYouAccountText = findViewById(R.id.mobile_you_account_text);
@@ -298,7 +466,6 @@ public class MobileBrowseActivity extends MobileActivity
         mSearchButton = findViewById(R.id.mobile_search_button);
         mCastButton = findViewById(R.id.mobile_cast_button);
         mTopBar = new BrowseTopBar(this, () -> getOnBackPressedDispatcher().onBackPressed());
-
         mMiniPlayerBar = findViewById(R.id.mobile_mini_player);
         mMiniPlayerFrame = findViewById(R.id.mobile_mini_player_frame);
         mMiniFreeze = findViewById(R.id.mobile_mini_freeze);
@@ -307,6 +474,70 @@ public class MobileBrowseActivity extends MobileActivity
         setupMiniPlayerBar();
         // STUBE(mini-inset): the last card can scroll clear of the docked mini-player.
         com.siro.stube.mobile.ui.playback.MiniPlayerListInset.attach(mMiniPlayerBar, mContentGrid);
+    }
+
+    /** Restores the floating glass dock and reserves its measured height in the feed. */
+    private void setupGlassNavigation() {
+        BlurTarget target = findViewById(R.id.mobile_glass_target);
+        mBottomGlass = findViewById(R.id.mobile_bottom_glass);
+        // A restrained blur keeps the dock translucent without turning image-heavy feed content
+        // into a muddy gray slab behind the labels.
+        // A smaller live blur keeps the glass effect while reducing per-frame work on mid-range
+        // phones such as Redmi Note 10.
+        ((BlurView) mBottomGlass).setupWith(target).setBlurRadius(4f);
+
+        mBottomNavAnchor = findViewById(R.id.mobile_bottom_nav_anchor);
+        mBottomNavAnchorHeight = mBottomNavAnchor.getLayoutParams().height;
+        View root = findViewById(R.id.mobile_browse_root);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
+            // Some OEM gesture-navigation modes (notably MIUI) report a smaller/zero
+            // navigation-bar inset while still reserving the bottom gesture area. Keep the
+            // floating dock and its touch targets above whichever safe inset is larger.
+            Insets bottomSafeArea = insets.getInsets(
+                    WindowInsetsCompat.Type.navigationBars() | WindowInsetsCompat.Type.systemGestures());
+            applyBottomNavigationInset(bottomSafeArea.bottom);
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(root);
+        // Reserve the dock itself plus its floating bottom gap so the last feed card can scroll
+        // fully clear of the glass surface.
+        mBottomGlass.addOnLayoutChangeListener((view, left, top, right, bottom,
+                                                 oldLeft, oldTop, oldRight, oldBottom) -> {
+            int measuredHeight = bottom - top;
+            ViewGroup.LayoutParams params = view.getLayoutParams();
+            if (params instanceof ViewGroup.MarginLayoutParams) {
+                measuredHeight += ((ViewGroup.MarginLayoutParams) params).bottomMargin;
+                // The dock margin already contains the system inset; the anchor applies that
+                // inset separately so it must not be counted twice in its reserved height.
+                measuredHeight -= mBottomNavSystemInset;
+            }
+            if (measuredHeight > 0) {
+                mBottomNavAnchorHeight = measuredHeight;
+                if (!mBottomNavHidden) {
+                    setBottomNavAnchorHeight(measuredHeight);
+                }
+            }
+        });
+    }
+
+    /** Keep the dock at its old safe-area position while the page backdrop continues behind it. */
+    private void applyBottomNavigationInset(int bottomInset) {
+        if (mBottomGlass == null || mBottomNavAnchor == null || bottomInset == mBottomNavSystemInset) {
+            return;
+        }
+        mBottomNavSystemInset = bottomInset;
+
+        ViewGroup.LayoutParams dockParams = mBottomGlass.getLayoutParams();
+        if (dockParams instanceof ViewGroup.MarginLayoutParams) {
+            ((ViewGroup.MarginLayoutParams) dockParams).bottomMargin = dp(16) + bottomInset;
+            mBottomGlass.setLayoutParams(dockParams);
+        }
+
+        ViewGroup.LayoutParams anchorParams = mBottomNavAnchor.getLayoutParams();
+        if (anchorParams instanceof ViewGroup.MarginLayoutParams) {
+            ((ViewGroup.MarginLayoutParams) anchorParams).bottomMargin = bottomInset;
+            mBottomNavAnchor.setLayoutParams(anchorParams);
+        }
     }
 
     private void setupSwipeRefresh() {
@@ -760,6 +991,11 @@ public class MobileBrowseActivity extends MobileActivity
         mContentGrid.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                if (dy > 0) {
+                    setBrowseBottomNavHidden(true);
+                } else if (dy < 0 || !recyclerView.canScrollVertically(-1)) {
+                    setBrowseBottomNavHidden(false);
+                }
                 if (dy < 0) {
                     // STUBE(shelf-tail): scrolling back up re-arms the near-end report, so a
                     // reader at a stalled end (a failed or refused page, nothing new to scroll to)
@@ -769,6 +1005,58 @@ public class MobileBrowseActivity extends MobileActivity
                 maybeTriggerPagination();
             }
         });
+    }
+
+    /** Slides the glass dock with the floating header and releases its feed space while hidden. */
+    private void setBrowseBottomNavHidden(boolean hidden) {
+        if (mBottomNavHidden == hidden || mBottomGlass == null) {
+            return;
+        }
+        mBottomNavHidden = hidden;
+        mBottomGlass.animate().cancel();
+
+        if (hidden) {
+            mBottomNav.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+            float travel = mBottomGlass.getHeight();
+            if (travel == 0f) {
+                travel = mBottomNav.getHeight();
+            }
+            final float hideDistance = travel;
+            mBottomGlass.animate()
+                    .translationY(hideDistance)
+                    .alpha(0f)
+                    .setDuration(210)
+                    .setInterpolator(new DecelerateInterpolator())
+                    .withEndAction(() -> {
+                        if (mBottomNavHidden) {
+                            mBottomNav.setVisibility(View.INVISIBLE);
+                            setBottomNavAnchorHeight(0);
+                        }
+                    })
+                    .start();
+            return;
+        }
+
+        setBottomNavAnchorHeight(mBottomNavAnchorHeight);
+        mBottomNav.setVisibility(View.VISIBLE);
+        mBottomNav.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+        mBottomGlass.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(210)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+    }
+
+    private void setBottomNavAnchorHeight(int height) {
+        if (mBottomNavAnchor == null) {
+            return;
+        }
+        ViewGroup.LayoutParams params = mBottomNavAnchor.getLayoutParams();
+        if (params.height != height) {
+            params.height = height;
+            mBottomNavAnchor.setLayoutParams(params);
+        }
     }
 
     /**
@@ -881,6 +1169,10 @@ public class MobileBrowseActivity extends MobileActivity
 
     private void setupBottomNav() {
         mBottomNav.setOnItemSelectedListener(item -> {
+            // Material invokes this listener before it marks its MenuItem checked. Keep our
+            // custom glass dock in sync from the tapped id directly instead of reading the old
+            // checked id here (which made the indicator appear one tap late on some devices).
+            updateBottomNavSelection(item.getItemId());
             if (!mSuppressNavCallback) {
                 onNavItemChosen(item.getItemId());
             }
@@ -889,16 +1181,214 @@ public class MobileBrowseActivity extends MobileActivity
         // STUBE(motion): tapping the tab you are on glides a scrolled feed back to the top, like
         // YouTube; at the top it does what it always did (repaint + refresh the section).
         mBottomNav.setOnItemReselectedListener(item -> {
-            if (mSuppressNavCallback) {
+            updateBottomNavSelection(item.getItemId());
+            handleBottomNavReselection(item.getItemId());
+        });
+        renderBottomNavItems();
+    }
+
+    /** Renders five stable touch targets while BottomNavigationView keeps owning section state. */
+    private void renderBottomNavItems() {
+        if (mBottomNavItems == null || mBottomNav == null) {
+            return;
+        }
+        Menu menu = mBottomNav.getMenu();
+        boolean rebuild = mBottomNavItems.getChildCount() != menu.size();
+        if (!rebuild) {
+            for (int index = 0; index < menu.size(); index++) {
+                Object tag = mBottomNavItems.getChildAt(index).getTag();
+                if (!(tag instanceof Integer) || (Integer) tag != menu.getItem(index).getItemId()) {
+                    rebuild = true;
+                    break;
+                }
+            }
+        }
+
+        // Reuse touch targets when only the active tab changes. Recreating all five views on each
+        // tap restarts ripple/measure work and makes the glass selection feel a frame behind.
+        if (rebuild) {
+            mBottomNavItems.removeAllViews();
+            for (int index = 0; index < menu.size(); index++) {
+                mBottomNavItems.addView(createBottomNavItem(menu.getItem(index)),
+                        new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+            }
+        }
+        updateBottomNavSelection();
+    }
+
+    private LinearLayout createBottomNavItem(android.view.MenuItem menuItem) {
+        final int itemId = menuItem.getItemId();
+        int iconSize = dp(19);
+
+        LinearLayout item = new LinearLayout(this);
+        item.setTag(itemId);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(android.view.Gravity.CENTER);
+        item.setFocusable(true);
+        item.setClickable(true);
+        item.setContentDescription(menuItem.getTitle());
+        item.setPadding(dp(1), 0, dp(1), 0);
+        item.setBackground(makeBottomNavItemBackground(
+                getColorInt(R.color.mobile_color_primary_container),
+                getColorInt(R.color.mobile_color_primary_container_stroke)));
+        item.setOnClickListener(v -> {
+            onBottomNavItemClicked(itemId);
+        });
+        item.setOnLongClickListener(v -> {
+            if (itemId != YOU_ITEM_ID && mPresenter != null) {
+                updateBottomNavSelection(mBottomNav.getSelectedItemId());
+                mPresenter.onSectionLongPressed(itemId - ITEM_ID_OFFSET);
+                return true;
+            }
+            return false;
+        });
+
+        ImageView icon = new ImageView(this);
+        Drawable source = menuItem.getIcon();
+        if (source != null) {
+            Drawable.ConstantState state = source.getConstantState();
+            icon.setImageDrawable(state != null ? state.newDrawable(getResources()).mutate() : source.mutate());
+        }
+        icon.setContentDescription(null);
+        item.addView(icon, new LinearLayout.LayoutParams(iconSize, iconSize));
+
+        TextView label = new TextView(this);
+        label.setText(menuItem.getTitle());
+        label.setTextSize(9);
+        label.setGravity(android.view.Gravity.CENTER);
+        label.setSingleLine(true);
+        label.setIncludeFontPadding(false);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelParams.topMargin = dp(2);
+        item.addView(label, labelParams);
+        return item;
+    }
+
+    /**
+     * Routes taps from the visible custom dock directly. The hidden Material view remains the
+     * source of checked state, but its listener is suppressed while that state is synchronized
+     * so a single tap cannot be dropped or dispatched twice.
+     */
+    private void onBottomNavItemClicked(int itemId) {
+        if (mBottomNav == null || mBottomNav.getMenu().findItem(itemId) == null) {
+            return;
+        }
+
+        int previousItemId = mBottomNav.getSelectedItemId();
+        updateBottomNavSelection(itemId);
+        if (previousItemId == itemId) {
+            handleBottomNavReselection(itemId);
+            return;
+        }
+        animateBottomNavItem(itemId);
+
+        boolean wasSuppressed = mSuppressNavCallback;
+        mSuppressNavCallback = true;
+        try {
+            mBottomNav.setSelectedItemId(itemId);
+        } finally {
+            mSuppressNavCallback = wasSuppressed;
+        }
+        if (!wasSuppressed) {
+            onNavItemChosen(itemId);
+        }
+    }
+
+    /** A short, restrained settle animation; tab state and destination still update immediately. */
+    private void animateBottomNavItem(int itemId) {
+        if (mBottomNavItems == null) {
+            return;
+        }
+        for (int index = 0; index < mBottomNavItems.getChildCount(); index++) {
+            View item = mBottomNavItems.getChildAt(index);
+            if (item.getTag() instanceof Integer && (Integer) item.getTag() == itemId) {
+                item.animate().cancel();
+                item.setScaleX(0.96f);
+                item.setScaleY(0.96f);
+                item.animate().scaleX(1f).scaleY(1f)
+                        .setDuration(140)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .start();
                 return;
             }
-            if (item.getItemId() != YOU_ITEM_ID && mContentGrid != null
-                    && mContentGrid.getVisibility() == View.VISIBLE && mContentGrid.canScrollVertically(-1)) {
-                smoothScrollGridToTop();
-            } else {
-                onNavItemChosen(item.getItemId());
+        }
+    }
+
+    private void handleBottomNavReselection(int itemId) {
+        if (mSuppressNavCallback) {
+            return;
+        }
+        if (itemId != YOU_ITEM_ID && mContentGrid != null
+                && mContentGrid.getVisibility() == View.VISIBLE && mContentGrid.canScrollVertically(-1)) {
+            smoothScrollGridToTop();
+        } else {
+            onNavItemChosen(itemId);
+        }
+    }
+
+    private void updateBottomNavSelection() {
+        if (mBottomNav != null) {
+            int selectedItemId = mBottomNavActiveItemId;
+            if (selectedItemId == Menu.NONE || mBottomNav.getMenu().findItem(selectedItemId) == null) {
+                selectedItemId = mBottomNav.getSelectedItemId();
             }
-        });
+            updateBottomNavSelection(selectedItemId);
+        }
+    }
+
+    private void updateBottomNavSelection(int selectedItemId) {
+        if (mBottomNavItems == null || mBottomNav == null) {
+            return;
+        }
+        mBottomNavActiveItemId = selectedItemId;
+        int activeColor = getColorInt(R.color.mobile_nav_active);
+        int inactiveColor = getColorInt(R.color.mobile_nav_inactive);
+
+        for (int index = 0; index < mBottomNavItems.getChildCount(); index++) {
+            View child = mBottomNavItems.getChildAt(index);
+            if (!(child instanceof LinearLayout) || !(child.getTag() instanceof Integer)) {
+                continue;
+            }
+            LinearLayout item = (LinearLayout) child;
+            boolean selected = (Integer) item.getTag() == selectedItemId;
+            if (item.isSelected() != selected) {
+                item.setSelected(selected);
+            }
+            // A freshly inflated custom item starts unselected, so selected == false for most
+            // tabs. Do not skip these rows: their source vector paths are white and need an
+            // explicit inactive tint before the first draw, or they disappear on the white dock.
+            View icon = item.getChildAt(0);
+            View label = item.getChildAt(1);
+            if (icon instanceof ImageView) {
+                ((ImageView) icon).setColorFilter(selected ? activeColor : inactiveColor);
+            }
+            if (label instanceof TextView) {
+                ((TextView) label).setTextColor(selected ? activeColor : inactiveColor);
+                ((TextView) label).setTypeface(android.graphics.Typeface.create("sans-serif-condensed", selected
+                        ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL));
+            }
+        }
+    }
+
+    private Drawable makeBottomNavItemBackground(int activeFill, int rippleColor) {
+        StateListDrawable selectionFill = new StateListDrawable();
+        GradientDrawable activeShape = new GradientDrawable();
+        activeShape.setShape(GradientDrawable.RECTANGLE);
+        activeShape.setCornerRadius(dp(16));
+        activeShape.setColor(activeFill);
+        selectionFill.addState(new int[]{android.R.attr.state_selected}, activeShape);
+        GradientDrawable inactiveShape = new GradientDrawable();
+        inactiveShape.setShape(GradientDrawable.RECTANGLE);
+        inactiveShape.setCornerRadius(dp(16));
+        inactiveShape.setColor(android.graphics.Color.TRANSPARENT);
+        selectionFill.addState(new int[0], inactiveShape);
+        return new RippleDrawable(ColorStateList.valueOf(rippleColor), selectionFill, null);
+    }
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void onNavItemChosen(int itemId) {
@@ -1032,6 +1522,9 @@ public class MobileBrowseActivity extends MobileActivity
             (isPersonalSection(section.getId()) ? personal : explore).add(section);
         }
 
+        if (!personal.isEmpty()) {
+            addYouGroupLabel(getString(R.string.mobile_you_library));
+        }
         for (BrowseSection section : personal) {
             addYouSectionRow(section);
         }
@@ -1108,7 +1601,7 @@ public class MobileBrowseActivity extends MobileActivity
 
         if (AppUpdates.instance(this).hasUnseenUpdate()) {
             BadgeDrawable badge = mBottomNav.getOrCreateBadge(YOU_ITEM_ID);
-            badge.setBackgroundColor(getColorInt(R.color.mobile_color_primary));
+            badge.setBackgroundColor(getColorInt(R.color.mobile_color_icon_accent));
             badge.setContentDescriptionNumberless(getString(R.string.mobile_update_row_available));
             badge.setVisible(true);
         } else {
@@ -1166,13 +1659,18 @@ public class MobileBrowseActivity extends MobileActivity
 
     private void addYouGroupLabel(CharSequence text) {
         TextView label = new TextView(this);
-        label.setText(text);
+        label.setText(text.toString().toUpperCase(Locale.getDefault()));
         label.setTextColor(getColorInt(R.color.mobile_color_on_surface_secondary));
-        label.setTextSize(14);
+        label.setTextSize(11);
+        label.setLetterSpacing(0.07f);
         label.setTypeface(label.getTypeface(), android.graphics.Typeface.BOLD);
-        int pad = Math.round(20 * getResources().getDisplayMetrics().density);
-        int padV = Math.round(10 * getResources().getDisplayMetrics().density);
-        label.setPadding(pad, padV, pad, padV / 2);
+        int side = Math.round(20 * getResources().getDisplayMetrics().density);
+        int top = Math.round(12 * getResources().getDisplayMetrics().density);
+        int bottom = Math.round(4 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(side, top, side, bottom);
+        label.setLayoutParams(lp);
         mYouRows.addView(label);
     }
 
@@ -1597,6 +2095,7 @@ public class MobileBrowseActivity extends MobileActivity
             mSuppressNavCallback = true;
             reassertNavHighlight(menu, false);
             mSuppressNavCallback = false;
+            renderBottomNavItems();
             return;
         }
         mNavSignature = newSignature;
@@ -1626,6 +2125,7 @@ public class MobileBrowseActivity extends MobileActivity
         mSuppressNavCallback = false;
 
         refreshUpdateBadge();
+        renderBottomNavItems();
 
         // Long-press on a section tab opens the section-management menu (Refresh / Rename /
         // Move / Mark watched / Clear history, ...) - the touch equivalent of the TV D-pad
