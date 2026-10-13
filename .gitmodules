@@ -3,4 +3,4 @@
 	url = https://github.com/aleixrodriala/SharedModules.git
 [submodule "MediaServiceCore"]
 	path = MediaServiceCore
-	url = https://github.com/aleixrodriala/MediaServiceCore.git
+	url = https://github.com/hoangcongson/MediaServiceCore.git

@@ -23,11 +23,13 @@ import re, sys
 v, code = sys.argv[1:]
 p = Path('smarttubetv/build.gradle')
 s = p.read_text()
-pat = r'(productFlavors\s*\{\s*stmobile\s*\{.*?versionCode\s+)\d+(\s*\n\s*versionName\s+")([^"]+)(")'
-s2 = re.sub(pat, rf'\g<1>{code}\g<2>{v}\g<4>', s, count=1, flags=re.S)
-if s2 == s:
-    raise SystemExit('Could not update stmobile version in smarttubetv/build.gradle')
-p.write_text(s2)
+pat = r'(productFlavors\s*\{\s*stmobile\s*\{.*?versionCode\s+)(\d+)(\s*\n\s*versionName\s+")([^"]+)(")'
+match = re.search(pat, s, flags=re.S)
+if not match:
+    raise SystemExit('Could not find stmobile version in smarttubetv/build.gradle')
+if int(match.group(2)) != int(code) or match.group(4) != v:
+    s = re.sub(pat, rf'\g<1>{code}\g<3>{v}\g<5>', s, count=1, flags=re.S)
+p.write_text(s)
 PY
 
 ./gradlew clean :smarttubetv:assembleStmobileRelease

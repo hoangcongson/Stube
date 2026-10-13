@@ -306,8 +306,8 @@ android {
             applicationId "com.siro.stube"
             minSdk = 24
             targetSdk = project.ext.targetSdkVersion
-            versionCode 10100
-            versionName "1.1"
+            versionCode 10200
+            versionName "1.2"
         }
 
         // Dedicated Android TV build. Uses the original Leanback/TV UI and
